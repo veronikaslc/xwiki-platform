@@ -102,7 +102,7 @@ public class WatchListEventMimeMessageFactory extends AbstractIteratorMimeMessag
         String factoryHint = (String) parameters.get(HINT_PARAMETER);
 
         // TODO: is this configurable or should we always use "template" instead?
-        MimeMessageFactory factory = getInternalMimeMessageFactory(factoryHint);
+        MimeMessageFactory factory = getInternalMimeMessageFactory(factoryHint, new Object());
 
         // Parse the source.
         EventsAndSubscribersSource sourceData = EventsAndSubscribersSource.parse(source);
