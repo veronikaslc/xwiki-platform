@@ -130,7 +130,7 @@ public class DefaultWatchListNotifier implements WatchListNotifier
         try {
             this.sendNotification(Arrays.asList(subscriber), events, notificationData);
         } catch (WatchListException e) {
-            throw new XWikiException("", e);
+            throw new XWikiException(XWikiException.MODULE_XWIKI, XWikiException.ERROR_XWIKI_UNKNOWN, "", e);
         }
     }
 
