@@ -42,6 +42,7 @@ import org.xwiki.mail.internal.thread.MailQueueManager;
 import org.xwiki.mail.internal.thread.MailRunnable;
 import org.xwiki.mail.internal.thread.PrepareMailQueueItem;
 import org.xwiki.mail.internal.thread.SendMailQueueItem;
+import org.xwiki.mail.internal.thread.context.Cloner;
 
 /**
  * Default implementation using the {@link org.xwiki.mail.internal.thread.SendMailRunnable} to send emails
@@ -76,6 +77,9 @@ public class DefaultMailSender implements MailSender, Initializable
     @Inject
     private MailQueueManager<SendMailQueueItem> sendMailQueueManager;
 
+    @Inject
+    private Cloner<ExecutionContext> executionContextCloner;
+
     private Thread prepareMailThread;
 
     private Thread sendMailThread;
@@ -104,12 +108,14 @@ public class DefaultMailSender implements MailSender, Initializable
             batchId = UUID.randomUUID().toString();
         }
 
-        // Pass the current execution context so that the mail message will be prepared and later sent in the same
-        // context.
+        // Pass a clone of the current execution context so that the mail message will be prepared and later sent in the
+        // same context, but in read-only mode (i.e. the preparation of the mail will not impact the current thread's
+        // context).
         ExecutionContext executionContext = this.execution.getContext();
+        ExecutionContext clonedExecutionContext = this.executionContextCloner.clone(executionContext);
 
         this.prepareMailQueueManager.addToQueue(new PrepareMailQueueItem(messages, session, listener, batchId,
-            executionContext));
+            clonedExecutionContext));
 
         return new DefaultMailResult(batchId, this.sendMailQueueManager);
     }
