@@ -13,7 +13,7 @@
 
 #macro(controller)
   #if ($flavorId && !$isFlavorValid)
-    ## TODO: propose an upgrade of the flavor
+    #upgradeController()
   #elseif ($request.noFlavor)
     ## Let the wiki be empty
     #displayNoFlavor()
@@ -26,15 +26,81 @@
   #end
 #end
 
-#macro(createUpdateFlavorPlan)
-  ## TODO: this code is not working, fix it
-  #set($installRequest = $services.extension.createUpgradePlanRequest($extensionNamespace))
-  #set($discard = $installRequest.addExtension($flavorId))
-  #set($job = $services.extension.createUpgradePlan($installRequest))
-    
+#macro(upgradeController)
+  #if ("$!request.action" == 'check-upgrade')
+    #createUpgradeFlavorPlan()
+    #displayRunningUpgradeFlavorPlan()
+  #else
+    #set ($plan = $extensionManager.getExtensionPlanJobStatus($flavorId.id, $extensionNamespace))
+    #if (!$plan)
+      #displayUpgradeFlavorChecker()
+    #elseif ($plan.state == 'FINISHED')
+      #displayFinishedUpgradeFlavorPlan()
+    #else
+      #displayRunningUpgradeFlavorPlan()
+    #end
+  #end
+#end
+
+#macro(createUpgradeFlavorPlan)
+  #set ($installRequest = $services.extension.createUpgradePlanRequest($extensionNamespace))
+  #set ($discard = $installRequest.addExtension($flavorId))
+  #set ($discard = $installRequest.setId(['extension', 'plan', $flavorId.id, $extensionNamespace]))
+  #set ($job = $services.extension.createUpgradePlan($installRequest))
+  #set ($plan = $job.status)
+#end
+
+#macro(displayUpgradeFlavorChecker)
+  ## TODO: add a button that call #createUpgradeFlavorPlan()
   {{html}}
-    #displayExtensionUpdaterPlan($job.status)
+  <form action="$xwiki.relativeRequestURL" method="post">
+    <div class="buttonwrapper">
+      ## TODO: translation key
+      <input type="hidden" name="action" value="check-upgrade" />
+      <input class="button primary" type="submit" value="$escapetool.xml('Check for upgrade')" />
+    </div>
+  </form>
   {{/html}}
+#end
+
+#macro(displayFinishedUpgradeFlavorPlan)
+  #set($hasError = false)
+  #foreach($log in $plan.log)
+    #if ($log.level.name() == 'ERROR')
+      #set($hasError = true)
+      #break
+    #end
+  #end
+  ##
+  #if ($hasError)
+    #displayExtensionUpdaterPlanStatus($plan)
+  #else
+    (% class="extensionUpdater" %)(((
+      (% class="xHint" %)
+      $services.localization.render('platform.extension.updater.lastCheckDate', [$xwiki.formatDate($plan.endDate)])
+      
+      #if ($plan.tree.isEmpty())
+        ## TODO: Chose an other flavor
+      #else
+        #set($planAction = $plan.tree[0].action)
+        #set($newVersionExtension = $planAction.extension)
+        
+        ## TODO: translation key
+        The following extension has been found for the upgrade:
+
+        {{html}}#displayExtension($newVersionExtension){{/html}}
+      #end
+    )))
+  #end
+#end
+
+#macro(displayRunningUpgradeFlavorPlan)
+  (% class="extensionUpdater" %)(((
+    (% class="xHint" %)
+    {{translation key="platform.extension.updater.loading"/}}
+
+    {{html}}#displayJobProgressBar($plan){{/html}}
+  )))
 #end
 
 #macro(displayFlavorLabel $message $backButtonMessage)
