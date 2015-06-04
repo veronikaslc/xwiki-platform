@@ -12,7 +12,7 @@
 #set ($isFlavorValid = $flavorId && $services.extension.installed.getInstalledExtension($flavorId.id, $extensionNamespace).isValid($extensionNamespace))
 
 #macro(controller)
-  #if ($flavorId && !$isFlavorValid)
+  #if ($flavorId && !$isFlavorValid && "$!request.noFlavor" == '' && "$!request.installFlavor" == '')
     #upgradeController()
   #elseif ($request.noFlavor)
     ## Let the wiki be empty
@@ -37,21 +37,41 @@
     #elseif ($plan.state == 'FINISHED')
       #displayFinishedUpgradeFlavorPlan()
     #else
-      #displayRunningUpgradeFlavorPlan()
+      #if ($plan.request.getProperty('flavorPlan'))
+        #displayRunningUpgradeFlavorPlan()
+      #else
+        #displayExtensionUpgrade()
+      #end
     #end
   #end
+#end
+
+#macro(displayExtensionUpgrade)
+  (% class="extensionUpdater" %)(((
+    #if(!$isAjaxRequest)
+      (% class="xHint" %)
+      $services.localization.render('platform.extension.updater.lastCheckDate', [$xwiki.formatDate($plan.endDate)])
+      
+      The following extension has been found for the upgrade:
+    #end
+    
+    #set ($newVersionExtensionId = $plan.request.extensions[0])
+    #set ($newVersionExtension   = $services.extension.resolve($newVersionExtensionId.id, $newVersionExtensionId.version))    
+    {{html}}#displayExtension($newVersionExtension){{/html}}
+    
+  )))
 #end
 
 #macro(createUpgradeFlavorPlan)
   #set ($installRequest = $services.extension.createUpgradePlanRequest($extensionNamespace))
   #set ($discard = $installRequest.addExtension($flavorId))
   #set ($discard = $installRequest.setId(['extension', 'plan', $flavorId.id, $extensionNamespace]))
+  #set ($discard = $installRequest.setProperty('flavorPlan', true))
   #set ($job = $services.extension.createUpgradePlan($installRequest))
   #set ($plan = $job.status)
 #end
 
 #macro(displayUpgradeFlavorChecker)
-  ## TODO: add a button that call #createUpgradeFlavorPlan()
   {{html}}
   <form action="$xwiki.relativeRequestURL" method="post">
     <div class="buttonwrapper">
@@ -80,7 +100,12 @@
       $services.localization.render('platform.extension.updater.lastCheckDate', [$xwiki.formatDate($plan.endDate)])
       
       #if ($plan.tree.isEmpty())
-        ## TODO: Chose an other flavor
+        {{warning}}
+        Unfortunaltly, we have not found a new version for your flavor.
+        We suggest you to pick an other one.
+        {{/warning}}
+        
+        #displayFlavorPickerStep()
       #else
         #set($planAction = $plan.tree[0].action)
         #set($newVersionExtension = $planAction.extension)
