@@ -52,7 +52,7 @@
       (% class="xHint" %)
       $services.localization.render('platform.extension.updater.lastCheckDate', [$xwiki.formatDate($plan.endDate)])
       
-      The following extension has been found for the upgrade:
+      $services.localization.render('platform.extension.distributionWizard.flavorStepUpgradeFlavor')
     #end
     
     #set ($newVersionExtensionId = $plan.request.extensions[0])
@@ -75,9 +75,8 @@
   {{html}}
   <form action="$xwiki.relativeRequestURL" method="post">
     <div class="buttonwrapper">
-      ## TODO: translation key
       <input type="hidden" name="action" value="check-upgrade" />
-      <input class="button primary" type="submit" value="$escapetool.xml('Check for upgrade')" />
+      <input class="button primary" type="submit" value="$escapetool.xml($services.localization.render('platform.extension.distributionWizard.flavorStepCheckUpgrade'))" />
     </div>
   </form>
   {{/html}}
@@ -101,17 +100,15 @@
       
       #if ($plan.tree.isEmpty())
         {{warning}}
-        Unfortunaltly, we have not found a new version for your flavor.
-        We suggest you to pick an other one.
+            $services.localization.render('platform.extension.distributionWizard.flavorNoUpgrade')
         {{/warning}}
         
         #displayFlavorPickerStep()
       #else
         #set($planAction = $plan.tree[0].action)
         #set($newVersionExtension = $planAction.extension)
-        
-        ## TODO: translation key
-        The following extension has been found for the upgrade:
+
+        $services.localization.render('platform.extension.distributionWizard.flavorStepUpgradeFlavor')
 
         {{html}}#displayExtension($newVersionExtension){{/html}}
       #end
@@ -163,8 +160,8 @@
           <p class="xHint">$services.localization.render('platform.extension.distributionWizard.flavorStepDescription')</p>
         </div>
         <div class="flavorRight buttonwrapper">
-          <input class="button secondary" type="submit" value="Let the wiki be empty" name="noFlavor" />
-          <input class="button" type="submit" value="Install this flavor" name="installFlavor" />
+          <input class="button secondary" type="submit" value="$escapetool.xml($services.localization.render('platform.extension.distributionWizard.flavorStepLetWikiBeEmpty'))" name="noFlavor" />
+          <input class="button" type="submit" value="$escapetool.xml($services.localization.render('platform.extension.distributionWizard.flavorStepInstallThisFlavor'))" name="installFlavor" />
         </div>
       </div>
       <div class="xform">
