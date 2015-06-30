@@ -29,8 +29,9 @@ import javax.inject.Singleton;
 
 import org.apache.solr.client.solrj.util.ClientUtils;
 import org.xwiki.component.annotation.Component;
+import org.xwiki.model.EntityType;
 import org.xwiki.model.reference.EntityReference;
-import org.xwiki.model.reference.SpaceReference;
+import org.xwiki.model.reference.EntityReferenceResolver;
 import org.xwiki.query.QueryException;
 import org.xwiki.query.QueryManager;
 import org.xwiki.search.solr.internal.api.FieldUtils;
@@ -62,6 +63,10 @@ public class WikiSolrReferenceResolver extends AbstractSolrReferenceResolver
     @Inject
     private QueryManager queryManager;
 
+    @Inject
+    @Named("explicit")
+    private EntityReferenceResolver<String> explicitEntityReferenceResolver;
+
     @Override
     public List<EntityReference> getReferences(EntityReference wikiReference) throws SolrIndexerException
     {
@@ -80,7 +85,8 @@ public class WikiSolrReferenceResolver extends AbstractSolrReferenceResolver
 
         // Visit each space
         for (String space : spaces) {
-            SpaceReference spaceReference = new SpaceReference(space, wikiReference);
+            EntityReference spaceReference =
+                this.explicitEntityReferenceResolver.resolve(space, EntityType.SPACE, wikiReference);
 
             try {
                 Iterables.addAll(result, this.spaceResolverProvider.get().getReferences(spaceReference));

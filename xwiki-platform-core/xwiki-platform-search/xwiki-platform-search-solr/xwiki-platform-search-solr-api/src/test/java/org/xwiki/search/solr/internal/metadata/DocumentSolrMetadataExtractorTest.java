@@ -45,8 +45,8 @@ import org.xwiki.context.ExecutionContext;
 import org.xwiki.model.EntityType;
 import org.xwiki.model.reference.AttachmentReference;
 import org.xwiki.model.reference.DocumentReference;
-import org.xwiki.model.reference.DocumentReferenceResolver;
 import org.xwiki.model.reference.EntityReference;
+import org.xwiki.model.reference.EntityReferenceProvider;
 import org.xwiki.model.reference.EntityReferenceSerializer;
 import org.xwiki.rendering.block.Block;
 import org.xwiki.rendering.renderer.BlockRenderer;
@@ -95,7 +95,8 @@ public class DocumentSolrMetadataExtractorTest
      */
     private XWikiDocument document;
 
-    private DocumentReference documentReference = new DocumentReference("wiki", "Space", "Name");
+    private DocumentReference documentReference = new DocumentReference("wiki", Arrays.asList("Path", "To", "Page"),
+        "WebHome");
 
     @Before
     public void setUp() throws Exception
@@ -149,6 +150,10 @@ public class DocumentSolrMetadataExtractorTest
         // Field Name Encoder
         SolrFieldNameEncoder fieldNameEncoder = this.mocker.getInstance(SolrFieldNameEncoder.class);
         when(fieldNameEncoder.encode(anyString())).then(AdditionalAnswers.returnsFirstArg());
+
+        EntityReferenceProvider defaultEntityReferenceProvider = this.mocker.getInstance(EntityReferenceProvider.class);
+        when(defaultEntityReferenceProvider.getDefaultReference(EntityType.DOCUMENT)).thenReturn(
+            new EntityReference("WebHome", EntityType.DOCUMENT));
     }
 
     @Test
@@ -158,17 +163,21 @@ public class DocumentSolrMetadataExtractorTest
         // Mock
         //
 
+        EntityReferenceSerializer<String> localEntityReferenceSerializer =
+            this.mocker.registerMockComponent(EntityReferenceSerializer.TYPE_STRING, "local");
+
         // ID
-        String id = "wiki:Space.Name_" + Locale.ROOT.toString();
+        String id = "wiki:Path.To.Page.WebHome_" + Locale.ROOT.toString();
         SolrReferenceResolver documentSolrReferenceResolver =
             this.mocker.getInstance(SolrReferenceResolver.class, "document");
         when(documentSolrReferenceResolver.getId(documentReference)).thenReturn(id);
 
-        // Full Name
-        String fullName = "Space.Name";
-        EntityReferenceSerializer<String> localEntityReferenceSerializer =
-            this.mocker.registerMockComponent(EntityReferenceSerializer.TYPE_STRING, "local");
-        when(localEntityReferenceSerializer.serialize(this.documentReference)).thenReturn(fullName);
+        // Document Parent Path & Document Descendant Path
+        when(localEntityReferenceSerializer.serialize(documentReference)).thenReturn("Path.To.Page.WebHome");
+        when(localEntityReferenceSerializer.serialize(documentReference.getParent())).thenReturn("Path.To.Page");
+        when(localEntityReferenceSerializer.serialize(documentReference.getParent().getParent())).thenReturn("Path.To");
+        when(localEntityReferenceSerializer.serialize(documentReference.getParent().getParent().getParent()))
+            .thenReturn("Path");
 
         // Creator.
         DocumentReference creatorReference = new DocumentReference("wiki", "Space", "Creator");
@@ -247,9 +256,13 @@ public class DocumentSolrMetadataExtractorTest
         assertEquals(id, solrDocument.getFieldValue(FieldUtils.ID));
 
         assertEquals(this.documentReference.getWikiReference().getName(), solrDocument.getFieldValue(FieldUtils.WIKI));
-        assertEquals(this.documentReference.getLastSpaceReference().getName(),
-            solrDocument.getFieldValue(FieldUtils.SPACE));
-        assertEquals(this.documentReference.getName(), solrDocument.getFieldValue(FieldUtils.NAME));
+        assertEquals("Path.To", solrDocument.getFieldValue(FieldUtils.DOCUMENT_PARENT_PATH));
+        assertEquals(Arrays.asList("0/Path", "1/Path.To", "2/Path.To.Page"),
+            solrDocument.getFieldValues(FieldUtils.DOCUMENT_PARENT_PATH_FACET));
+        assertEquals(Arrays.asList("Path", "Path.To", "Path.To.Page"),
+            solrDocument.getFieldValues(FieldUtils.DOCUMENT_DESCENDANT_PATH));
+        assertEquals("Page", solrDocument.getFieldValue(FieldUtils.DOCUMENT_NAME));
+        assertEquals(false, solrDocument.getFieldValue(FieldUtils.DOCUMENT_FINAL));
 
         assertEquals(Locale.US.toString(), solrDocument.getFieldValue(FieldUtils.LOCALE));
         assertEquals(Locale.US.getLanguage(), solrDocument.getFieldValue(FieldUtils.LANGUAGE));
@@ -259,8 +272,6 @@ public class DocumentSolrMetadataExtractorTest
             && actualLocales.contains(Locale.US.toString()));
         assertEquals(this.document.isHidden(), solrDocument.getFieldValue(FieldUtils.HIDDEN));
         assertEquals(EntityType.DOCUMENT.name(), solrDocument.getFieldValue(FieldUtils.TYPE));
-
-        assertEquals(fullName, solrDocument.getFieldValue(FieldUtils.FULLNAME));
 
         assertEquals(title, solrDocument.getFieldValue(FieldUtils.getFieldName(FieldUtils.TITLE, Locale.US)));
         assertEquals(rawContent,
@@ -278,6 +289,11 @@ public class DocumentSolrMetadataExtractorTest
 
         assertEquals(creationDate, solrDocument.getFieldValue(FieldUtils.CREATIONDATE));
         assertEquals(date, solrDocument.get(FieldUtils.DATE).getValue());
+
+        // Deprecated fields
+        assertEquals("Path.To.Page.WebHome", solrDocument.getFieldValue(FieldUtils.FULLNAME));
+        assertEquals("Path.To.Page", solrDocument.getFieldValue(FieldUtils.SPACE));
+        assertEquals(this.documentReference.getName(), solrDocument.getFieldValue(FieldUtils.NAME));
     }
 
     @Test
@@ -520,9 +536,6 @@ public class DocumentSolrMetadataExtractorTest
         String authorFullName = "XWiki." + authorAlias;
         DocumentReference authorReference = new DocumentReference("wiki", "XWiki", authorAlias);
         when(attachment.getAuthorReference()).thenReturn(authorReference);
-
-        DocumentReferenceResolver<String> resolver = this.mocker.getInstance(DocumentReferenceResolver.TYPE_STRING);
-        when(resolver.resolve(authorFullName, attachment.getReference())).thenReturn(authorReference);
 
         EntityReferenceSerializer<String> serializer = this.mocker.getInstance(EntityReferenceSerializer.TYPE_STRING);
         String authorStringReference = "wiki:" + authorFullName;

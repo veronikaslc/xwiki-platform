@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map.Entry;
+import java.util.Objects;
 
 import javax.inject.Inject;
 import javax.inject.Named;
@@ -35,6 +36,7 @@ import org.xwiki.model.EntityType;
 import org.xwiki.model.reference.AttachmentReference;
 import org.xwiki.model.reference.DocumentReference;
 import org.xwiki.model.reference.EntityReference;
+import org.xwiki.model.reference.EntityReferenceProvider;
 import org.xwiki.search.solr.internal.api.FieldUtils;
 import org.xwiki.search.solr.internal.api.SolrIndexerException;
 
@@ -62,21 +64,24 @@ public class DocumentSolrReferenceResolver extends AbstractSolrReferenceResolver
      */
     @Inject
     @Named("object")
-    protected Provider<SolrReferenceResolver> objectResolverProvider;
+    private Provider<SolrReferenceResolver> objectResolverProvider;
 
     /**
      * Used to resolve space references.
      */
     @Inject
     @Named("space")
-    protected Provider<SolrReferenceResolver> spaceResolverProvider;
+    private Provider<SolrReferenceResolver> spaceResolverProvider;
 
     /**
      * Used to resolve attachment references.
      */
     @Inject
     @Named("attachment")
-    protected Provider<SolrReferenceResolver> attachmentResolverProvider;
+    private Provider<SolrReferenceResolver> attachmentResolverProvider;
+
+    @Inject
+    private EntityReferenceProvider defaultEntityReferenceProvider;
 
     @Override
     public List<EntityReference> getReferences(EntityReference reference) throws SolrIndexerException
@@ -173,53 +178,47 @@ public class DocumentSolrReferenceResolver extends AbstractSolrReferenceResolver
     {
         DocumentReference documentReference = new DocumentReference(reference);
 
-        String result = super.getId(reference);
-
         // Document IDs also contain the locale code to differentiate between them.
-        // Objects, attachments, etc. don`t need this because the only thing that is translated in an XWiki document
+        // Objects, attachments, etc. don't need this because the only thing that is translated in an XWiki document
         // right now is the document title and content. Objects and attachments are not translated.
-        result += FieldUtils.USCORE + getLocale(documentReference);
-
-        return result;
-    }
-
-    /**
-     * @param documentReference reference to the document.
-     * @return the locale code of the referenced document.
-     * @throws SolrIndexerException if problems occur.
-     */
-    protected Locale getLocale(DocumentReference documentReference) throws SolrIndexerException
-    {
-        Locale locale = null;
-
-        try {
-            if (documentReference.getLocale() != null && !documentReference.getLocale().equals(Locale.ROOT)) {
-                locale = documentReference.getLocale();
-            } else {
-                XWikiContext xcontext = this.xcontextProvider.get();
-                locale = xcontext.getWiki().getDocument(documentReference, xcontext).getRealLocale();
-            }
-        } catch (Exception e) {
-            throw new SolrIndexerException(String.format("Exception while fetching the locale of the document '%s'",
-                documentReference), e);
+        Locale locale = documentReference.getLocale();
+        if (locale == null) {
+            locale = Locale.ROOT;
         }
 
-        return locale;
+        return super.getId(reference) + FieldUtils.USCORE + locale;
     }
 
     @Override
     public String getQuery(EntityReference reference) throws SolrIndexerException
     {
+        EntityReference documentReference = reference.extractReference(EntityType.DOCUMENT);
+        EntityReference defaultDocumentReference =
+            this.defaultEntityReferenceProvider.getDefaultReference(EntityType.DOCUMENT);
+        boolean docFinal = true;
+        String documentName = documentReference.getName();
+        EntityReference documentParentReference = documentReference.extractReference(EntityType.SPACE);
+        if (Objects.equals(documentReference.getName(), defaultDocumentReference.getName())) {
+            docFinal = false;
+            documentName = documentParentReference.getName();
+            documentParentReference = documentParentReference.getParent();
+        }
+
         StringBuilder builder = new StringBuilder();
 
-        EntityReference spaceReference = reference.extractReference(EntityType.SPACE);
-        builder.append(spaceResolverProvider.get().getQuery(spaceReference));
+        builder.append(this.spaceResolverProvider.get().getQuery(documentParentReference));
 
         builder.append(QUERY_AND);
 
-        builder.append(FieldUtils.NAME_EXACT);
+        builder.append(FieldUtils.DOCUMENT_NAME_EXACT);
         builder.append(':');
-        builder.append(ClientUtils.escapeQueryChars(reference.getName()));
+        builder.append(ClientUtils.escapeQueryChars(documentName));
+
+        builder.append(QUERY_AND);
+
+        builder.append(FieldUtils.DOCUMENT_FINAL);
+        builder.append(':');
+        builder.append(docFinal);
 
         return builder.toString();
     }

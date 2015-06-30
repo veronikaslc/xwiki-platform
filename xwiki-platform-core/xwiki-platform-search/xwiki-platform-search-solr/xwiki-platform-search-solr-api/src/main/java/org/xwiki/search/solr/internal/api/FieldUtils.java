@@ -76,29 +76,98 @@ public final class FieldUtils
     public static final String WIKI = "wiki";
 
     /**
-     * Name of the space the document belongs to.
+     * The path of a nested document parent. For a nested document {@code A.B.C} the parent path is {@code A.B}. The
+     * parent path is empty for a top level document.
+     * 
+     * @since 7.2M1
      */
+    public static final String DOCUMENT_PARENT_PATH = "docParentPath";
+
+    /**
+     * Unanalyzed and not stored version of the {@link #DOCUMENT_PARENT_PATH}.
+     * 
+     * @since 7.2M1
+     */
+    public static final String DOCUMENT_PARENT_PATH_EXACT = "docParentPath_exact";
+
+    /**
+     * Unanalyzed and not stored version of the {@link #DOCUMENT_PARENT_PATH} that is used for hierarchical faceting on
+     * nested documents (using 'facet.prefix'-based drill down).
+     * 
+     * @since 7.2M1
+     */
+    public static final String DOCUMENT_PARENT_PATH_FACET = "docParentPath_facet";
+
+    /**
+     * This field is used to match descendant documents. A query such as docDescendantPath:A.B will match A.B and all
+     * its descendants (like A.B.C). This is possible because this field holds the paths of all the ancestors of a
+     * document. E.g. for a document A.B.C this field will hold ['A', 'A.B', 'A.B.C']. As a consequence, searching for
+     * docDescendantPath:A.B will match A.B.C
+     * 
+     * @since 7.2M1
+     */
+    public static final String DOCUMENT_DESCENDANT_PATH = "docDescendantPath";
+
+    /**
+     * Name of the space the document belongs to.
+     * 
+     * @deprecated since 7.2M1 use {@link #DOCUMENT_PARENT_PATH} instead
+     */
+    @Deprecated
     public static final String SPACE = "space";
 
     /**
      * Unanalyzed and not stored version of the document's space.
+     * 
+     * @deprecated since 7.2M1 use {@link #DOCUMENT_PARENT_PATH_EXACT} instead
      */
+    @Deprecated
     public static final String SPACE_EXACT = "space_exact";
 
     /**
-     * Name of the document.
+     * The name of a nested document. For a nested document {@code A.B.C} the name is {@code C}.
+     * 
+     * @since 7.2M1
      */
+    public static final String DOCUMENT_NAME = "docName";
+
+    /**
+     * Unanalyzed and not stored version of the {@link #DOCUMENT_NAME}.
+     * 
+     * @since 7.2M1
+     */
+    public static final String DOCUMENT_NAME_EXACT = "docName_exact";
+
+    /**
+     * Name of the document.
+     * 
+     * @deprecated since 7.2M1 use {@link #DOCUMENT_NAME} instead
+     */
+    @Deprecated
     public static final String NAME = "name";
 
     /**
-     * Unanalyzed and not stored version of the document's space.
+     * Unanalyzed and not stored version of the document's name.
+     * 
+     * @deprecated since 7.2M1 use {@link #DOCUMENT_NAME_EXACT} instead
      */
+    @Deprecated
     public static final String NAME_EXACT = "name_exact";
 
     /**
      * FullName of the document (example: {@code Main.WebHome}).
+     * 
+     * @deprecated since 7.2M1 use {@link #DOCUMENT_PARENT_PATH} and {@link #DOCUMENT_NAME}
      */
+    @Deprecated
     public static final String FULLNAME = "fullname";
+
+    /**
+     * Specifies whether a document can have nested child documents or not.
+     * 
+     * @since 7.2M1
+     */
+    public static final String DOCUMENT_FINAL = "docFinal";
 
     /**
      * Title of the document.

@@ -36,6 +36,9 @@ import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
 import org.xwiki.component.annotation.Component;
 import org.xwiki.localization.LocaleUtils;
+import org.xwiki.model.reference.DocumentReference;
+import org.xwiki.model.reference.DocumentReferenceResolver;
+import org.xwiki.model.reference.EntityReferenceSerializer;
 import org.xwiki.query.Query;
 import org.xwiki.query.QueryManager;
 import org.xwiki.query.solr.internal.SolrQueryExecutor;
@@ -46,6 +49,7 @@ import org.xwiki.rest.model.jaxb.Link;
 import org.xwiki.rest.model.jaxb.SearchResult;
 import org.xwiki.rest.resources.pages.PageResource;
 import org.xwiki.rest.resources.pages.PageTranslationResource;
+import org.xwiki.search.solr.internal.api.FieldUtils;
 
 import com.xpn.xwiki.XWikiException;
 
@@ -60,6 +64,13 @@ public class SOLRSearchSource extends AbstractSearchSource
 {
     @Inject
     protected QueryManager queryManager;
+
+    @Inject
+    private DocumentReferenceResolver<SolrDocument> solrDocumentReferenceResolver;
+
+    @Inject
+    @Named("local")
+    private EntityReferenceSerializer<String> localEntityReferenceSerializer;
 
     @Override
     public List<SearchResult> search(String queryString, String defaultWikiName, String wikis,
@@ -119,8 +130,9 @@ public class SOLRSearchSource extends AbstractSearchSource
         // Boost
         // FIXME: take it from configuration
         query.bindValue("qf",
-            "title^10.0 name^10.0 doccontent^2.0 objcontent^0.4 filename^0.4 attcontent^0.4 doccontentraw^0.4 "
-                + "author_display^0.08 creator_display^0.08 " + "comment^0.016 attauthor_display^0.016 space^0.016");
+            "title^10.0 docName^10.0 doccontent^2.0 objcontent^0.4 filename^0.4 attcontent^0.4 doccontentraw^0.4 "
+                + "author_display^0.08 creator_display^0.08 "
+                + "comment^0.016 attauthor_display^0.016 docParentPath^0.016");
 
         // Order
         if (!StringUtils.isBlank(orderField)) {
@@ -142,28 +154,29 @@ public class SOLRSearchSource extends AbstractSearchSource
             for (SolrDocument document : documents) {
                 SearchResult searchResult = this.objectFactory.createSearchResult();
 
-                searchResult.setPageFullName((String) document.get("fullname"));
-                searchResult.setTitle((String) document.get("title"));
-                searchResult.setWiki((String) document.get("wiki"));
-                searchResult.setSpace((String) document.get("space"));
-                searchResult.setPageName((String) document.get("name"));
-                searchResult.setVersion((String) document.get("version"));
+                DocumentReference documentReference = this.solrDocumentReferenceResolver.resolve(document);
+                searchResult.setPageFullName(this.localEntityReferenceSerializer.serialize(documentReference));
+                searchResult.setTitle((String) document.get(FieldUtils.TITLE));
+                searchResult.setWiki(documentReference.getWikiReference().getName());
+                searchResult.setSpace(this.localEntityReferenceSerializer.serialize(documentReference.getParent()));
+                searchResult.setPageName(documentReference.getName());
+                searchResult.setVersion((String) document.get(FieldUtils.VERSION));
 
                 searchResult.setType("page");
                 searchResult.setId(Utils.getPageId(searchResult.getWiki(), searchResult.getSpace(),
                     searchResult.getPageName()));
 
-                searchResult.setScore(((Number) document.get("score")).floatValue());
-                searchResult.setAuthor((String) document.get("author"));
+                searchResult.setScore(((Number) document.get(FieldUtils.SCORE)).floatValue());
+                searchResult.setAuthor((String) document.get(FieldUtils.AUTHOR));
                 Calendar calendar = Calendar.getInstance();
-                calendar.setTime((Date) document.get("date"));
+                calendar.setTime((Date) document.get(FieldUtils.DATE));
                 searchResult.setModified(calendar);
 
                 if (withPrettyNames) {
-                    searchResult.setAuthorName((String) document.get("author_display"));
+                    searchResult.setAuthorName((String) document.get(FieldUtils.AUTHOR_DISPLAY));
                 }
 
-                Locale locale = LocaleUtils.toLocale((String) document.get("doclocale"));
+                Locale locale = LocaleUtils.toLocale((String) document.get(FieldUtils.DOCUMENT_LOCALE));
 
                 String pageUri = null;
                 if (Locale.ROOT == locale) {

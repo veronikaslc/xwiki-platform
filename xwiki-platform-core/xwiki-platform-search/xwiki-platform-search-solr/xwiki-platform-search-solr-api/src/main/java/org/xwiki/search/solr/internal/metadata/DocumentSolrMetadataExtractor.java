@@ -32,7 +32,6 @@ import org.apache.solr.common.SolrInputDocument;
 import org.xwiki.component.annotation.Component;
 import org.xwiki.model.EntityType;
 import org.xwiki.model.reference.DocumentReference;
-import org.xwiki.model.reference.DocumentReferenceResolver;
 import org.xwiki.model.reference.EntityReference;
 import org.xwiki.model.reference.EntityReferenceSerializer;
 import org.xwiki.rendering.renderer.BlockRenderer;
@@ -71,13 +70,6 @@ public class DocumentSolrMetadataExtractor extends AbstractSolrMetadataExtractor
     private EntityReferenceSerializer<String> entityReferenceSerializer;
 
     /**
-     * Used to resolve the attachment author reference because {@link XWikiAttachment} doesn't have a method to return
-     * the author reference.
-     */
-    @Inject
-    private DocumentReferenceResolver<String> documentReferenceResolver;
-
-    /**
      * Used to serialize entity reference to be used in dynamic field names.
      */
     @Inject
@@ -105,13 +97,11 @@ public class DocumentSolrMetadataExtractor extends AbstractSolrMetadataExtractor
 
         Locale locale = getLocale(documentReference);
 
-        solrDocument.setField(FieldUtils.FULLNAME, localSerializer.serialize(documentReference));
-
-        // Same for document title
+        // Document title
         try {
             String plainTitle = translatedDocument.getRenderedTitle(Syntax.PLAIN_1_0, xcontext);
 
-            // Rendered title.
+            // Rendered title
             solrDocument.setField(FieldUtils.getFieldName(FieldUtils.TITLE, locale), plainTitle);
         } catch (Throwable e) {
             this.logger.error("Failed to render title for document [{}]", entityReference);
@@ -142,7 +132,7 @@ public class DocumentSolrMetadataExtractor extends AbstractSolrMetadataExtractor
         // Get both serialized user reference string and pretty user name
         setAuthors(solrDocument, translatedDocument, entityReference);
 
-        // Document dates.
+        // Document dates
         solrDocument.setField(FieldUtils.CREATIONDATE, translatedDocument.getCreationDate());
         solrDocument.setField(FieldUtils.DATE, translatedDocument.getContentUpdateDate());
 
@@ -151,6 +141,9 @@ public class DocumentSolrMetadataExtractor extends AbstractSolrMetadataExtractor
 
         // Add any extra fields (about objects, etc.) that can improve the findability of the document.
         setExtras(documentReference, solrDocument, locale);
+        
+        // Deprecated fields
+        solrDocument.setField(FieldUtils.FULLNAME, localSerializer.serialize(documentReference));
 
         return true;
     }

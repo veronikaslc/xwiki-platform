@@ -862,10 +862,10 @@
 
        <!-- Default query fields with default attached boost values. -->
        <str name="qf">
-          title^5.0 name^5.0 filename^5.0
+          title^5.0 docName^5.0 filename^5.0
           doccontent doccontentraw objcontent attcontent propertyvalue
           author_display^0.2 creator_display^0.2 attauthor_display^0.2
-          comment^0.04 space^0.04
+          comment^0.04 docParentPath^0.04
        </str>
 
        <!-- Field aliasing. -->
@@ -902,7 +902,7 @@
        <str name="facet">on</str>
        <!-- NOTE: The search UI displays the facets in this order so keep the most important facets first. -->
        <str name="facet.field">wiki</str>
-       <str name="facet.field">space_exact</str>
+       <str name="facet.field">docParentPath_facet</str>
        <str name="facet.field">locale</str>
        <str name="facet.field">author</str>
        <str name="facet.field">creator</str>
@@ -910,7 +910,6 @@
        <str name="facet.field">creationdate</str>
        <str name="facet.field">type</str>
        <str name="facet.field">class</str>
-       <str name="facet.field">name_exact</str>
        <str name="facet.field">mimetype</str>
        <str name="facet.field">attauthor</str>
        <str name="facet.field">attdate</str>

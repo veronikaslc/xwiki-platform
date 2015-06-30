@@ -33,19 +33,21 @@ import javax.inject.Named;
 import javax.inject.Provider;
 import javax.inject.Singleton;
 
-import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.LocaleUtils;
 import org.apache.solr.client.solrj.SolrQuery;
-import org.apache.solr.client.solrj.response.QueryResponse;
+import org.apache.solr.client.solrj.StreamingResponseCallback;
 import org.apache.solr.common.SolrDocument;
-import org.apache.solr.common.SolrDocumentList;
+import org.apache.solr.common.params.FacetParams;
+import org.apache.solr.common.params.HighlightParams;
 import org.slf4j.Logger;
 import org.xwiki.bridge.event.AbstractDocumentEvent;
 import org.xwiki.bridge.event.ApplicationReadyEvent;
 import org.xwiki.bridge.event.DocumentUpdatedEvent;
 import org.xwiki.bridge.event.WikiReadyEvent;
 import org.xwiki.component.annotation.Component;
-import org.xwiki.model.reference.DocumentReference;
+import org.xwiki.model.EntityType;
+import org.xwiki.model.reference.DocumentReferenceResolver;
 import org.xwiki.observation.EventListener;
 import org.xwiki.observation.event.Event;
 import org.xwiki.observation.event.filter.RegexEventFilter;
@@ -103,6 +105,12 @@ public class SolrIndexAvailableLocalesListener implements EventListener
     @Inject
     private Provider<SolrIndexer> solrIndexer;
 
+    /**
+     * Used to extract a document reference from a {@link SolrDocument}.
+     */
+    @Inject
+    private DocumentReferenceResolver<SolrDocument> solrDocumentReferenceResolver;
+
     @Override
     public List<Event> getEvents()
     {
@@ -151,22 +159,28 @@ public class SolrIndexAvailableLocalesListener implements EventListener
                     }
 
                     SolrQuery solrQuery = new SolrQuery(builder.toString());
-                    solrQuery.setFields(FieldUtils.NAME, FieldUtils.SPACE, FieldUtils.WIKI, FieldUtils.DOCUMENT_LOCALE);
+                    solrQuery.setFields(FieldUtils.WIKI, FieldUtils.DOCUMENT_PARENT_PATH, FieldUtils.DOCUMENT_NAME,
+                        FieldUtils.DOCUMENT_FINAL, FieldUtils.DOCUMENT_LOCALE);
+                    solrQuery.addFilterQuery(FieldUtils.TYPE + ':' + EntityType.DOCUMENT.name());
+                    // Speed up the query by disabling the faceting and the highlighting.
+                    solrQuery.set(FacetParams.FACET, false);
+                    solrQuery.set(HighlightParams.HIGHLIGHT, false);
 
-                    // TODO: be nicer with the memory when there is a lot of indexed documents and do smaller batches or
-                    // stream the results
-                    QueryResponse response = this.solrInstanceProvider.get().query(solrQuery);
+                    StreamingResponseCallback callback = new StreamingResponseCallback()
+                    {
+                        @Override
+                        public void streamSolrDocument(SolrDocument doc)
+                        {
+                            solrIndexer.get().index(solrDocumentReferenceResolver.resolve(doc), true);
+                        }
 
-                    SolrDocumentList results = response.getResults();
-                    for (SolrDocument solrDocument : results) {
-                        DocumentReference reference =
-                            createDocumentReference((String) solrDocument.get(FieldUtils.WIKI),
-                                (String) solrDocument.get(FieldUtils.SPACE),
-                                (String) solrDocument.get(FieldUtils.NAME),
-                                (String) solrDocument.get(FieldUtils.DOCUMENT_LOCALE));
-
-                        this.solrIndexer.get().index(reference, true);
-                    }
+                        @Override
+                        public void streamDocListInfo(long numFound, long start, Float maxScore)
+                        {
+                            // Do nothing.
+                        }
+                    };
+                    this.solrInstanceProvider.get().queryAndStreamResponse(solrQuery, callback);
                 }
             }
         } catch (Exception e) {
@@ -185,21 +199,5 @@ public class SolrIndexAvailableLocalesListener implements EventListener
         parentLocales.remove(locale);
 
         return parentLocales;
-    }
-
-    /**
-     * @param wiki the wiki part of the reference
-     * @param space the space part of the reference
-     * @param name the name part of the reference
-     * @param localeString the locale part of the reference as String
-     * @return the complete document reference
-     */
-    private DocumentReference createDocumentReference(String wiki, String space, String name, String localeString)
-    {
-        if (localeString == null || localeString.isEmpty()) {
-            return new DocumentReference(wiki, space, name);
-        } else {
-            return new DocumentReference(wiki, space, name, LocaleUtils.toLocale(localeString));
-        }
     }
 }

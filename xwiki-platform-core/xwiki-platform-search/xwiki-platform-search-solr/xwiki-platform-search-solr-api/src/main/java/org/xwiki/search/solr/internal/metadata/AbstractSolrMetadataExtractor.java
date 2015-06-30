@@ -42,6 +42,7 @@ import org.xwiki.context.Execution;
 import org.xwiki.model.EntityType;
 import org.xwiki.model.reference.DocumentReference;
 import org.xwiki.model.reference.EntityReference;
+import org.xwiki.model.reference.EntityReferenceProvider;
 import org.xwiki.model.reference.EntityReferenceSerializer;
 import org.xwiki.search.solr.internal.api.FieldUtils;
 import org.xwiki.search.solr.internal.api.SolrIndexerException;
@@ -112,6 +113,9 @@ public abstract class AbstractSolrMetadataExtractor implements SolrMetadataExtra
      */
     @Inject
     protected ComponentManager componentManager;
+
+    @Inject
+    private EntityReferenceProvider defaultEntityReferenceProvider;
 
     @Override
     public LengthSolrInputDocument getSolrDocument(EntityReference entityReference) throws SolrIndexerException,
@@ -233,12 +237,31 @@ public abstract class AbstractSolrMetadataExtractor implements SolrMetadataExtra
         solrDocument.setField(FieldUtils.HIDDEN, document.isHidden());
 
         solrDocument.setField(FieldUtils.WIKI, documentReference.getWikiReference().getName());
-        solrDocument.setField(FieldUtils.SPACE, documentReference.getLastSpaceReference().getName());
-        solrDocument.setField(FieldUtils.NAME, documentReference.getName());
+
+        EntityReference parentReference = documentReference.getParent();
+        String documentName = documentReference.getName();
+        String defaultDocumentName =
+            this.defaultEntityReferenceProvider.getDefaultReference(EntityType.DOCUMENT).getName();
+        boolean documentFinal = true;
+        if (documentName.equals(defaultDocumentName)) {
+            documentFinal = false;
+            documentName = parentReference.getName();
+            parentReference = parentReference.getParent();
+        }
+        solrDocument.setField(FieldUtils.DOCUMENT_PARENT_PATH, this.localSerializer.serialize(parentReference));
+        solrDocument.setField(FieldUtils.DOCUMENT_NAME, documentName);
+        solrDocument.setField(FieldUtils.DOCUMENT_FINAL, documentFinal);
+
+        // Set the fields that are used to query / filter the document hierarchy.
+        setHierarchyFields(solrDocument, new EntityReference(documentName, EntityType.SPACE, parentReference));
 
         Locale locale = getLocale(documentReference);
         solrDocument.setField(FieldUtils.LOCALE, locale.toString());
         solrDocument.setField(FieldUtils.LANGUAGE, locale.getLanguage());
+
+        // Deprecated fields.
+        solrDocument.setField(FieldUtils.SPACE, this.localSerializer.serialize(documentReference.getParent()));
+        solrDocument.setField(FieldUtils.NAME, documentReference.getName());
 
         return true;
     }
@@ -509,6 +532,18 @@ public abstract class AbstractSolrMetadataExtractor implements SolrMetadataExtra
         } catch (Exception e) {
             this.logger.error("Failed to retrieve the content of attachment [{}]", attachment.getReference(), e);
             return null;
+        }
+    }
+
+    private void setHierarchyFields(SolrInputDocument solrDocument, EntityReference path)
+    {
+        List<EntityReference> ancestors = path.getReversedReferenceChain();
+        // Skip the wiki reference.
+        for (int i = 1; i < ancestors.size(); i++) {
+            String localAncestorReference = this.localSerializer.serialize(ancestors.get(i));
+            // We prefix the local ancestor reference with the depth in order to use 'facet.prefix'.
+            solrDocument.addField(FieldUtils.DOCUMENT_PARENT_PATH_FACET, (i - 1) + "/" + localAncestorReference);
+            solrDocument.addField(FieldUtils.DOCUMENT_DESCENDANT_PATH, localAncestorReference);
         }
     }
 }

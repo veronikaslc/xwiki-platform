@@ -31,6 +31,7 @@ import org.apache.solr.client.solrj.util.ClientUtils;
 import org.xwiki.component.annotation.Component;
 import org.xwiki.model.EntityType;
 import org.xwiki.model.reference.EntityReference;
+import org.xwiki.model.reference.EntityReferenceSerializer;
 import org.xwiki.query.QueryException;
 import org.xwiki.query.QueryManager;
 import org.xwiki.search.solr.internal.api.FieldUtils;
@@ -69,10 +70,16 @@ public class SpaceSolrReferenceResolver extends AbstractSolrReferenceResolver
     @Inject
     private QueryManager queryManager;
 
+    @Inject
+    @Named("local")
+    private EntityReferenceSerializer<String> localEntityReferenceSerializer;
+
     @Override
     public List<EntityReference> getReferences(EntityReference spaceReference) throws SolrIndexerException
     {
         List<EntityReference> result = new ArrayList<EntityReference>();
+        EntityReference wikiReference = spaceReference.extractReference(EntityType.WIKI);
+        String localSpaceReference = this.localEntityReferenceSerializer.serialize(spaceReference);
 
         // Ignore the space reference because it is not indexable.
 
@@ -80,8 +87,8 @@ public class SpaceSolrReferenceResolver extends AbstractSolrReferenceResolver
         List<String> documentNames;
         try {
             documentNames =
-                this.queryManager.getNamedQuery("getSpaceDocsName").setWiki(spaceReference.getParent().getName())
-                    .bindValue("space", spaceReference.getName()).execute();
+                this.queryManager.getNamedQuery("getSpaceDocsName").setWiki(wikiReference.getName())
+                    .bindValue("space", localSpaceReference).execute();
         } catch (QueryException e) {
             throw new SolrIndexerException("Failed to query space [" + spaceReference + "] documents", e);
         }
@@ -109,9 +116,19 @@ public class SpaceSolrReferenceResolver extends AbstractSolrReferenceResolver
 
         builder.append(QUERY_AND);
 
-        builder.append(FieldUtils.SPACE_EXACT);
+        EntityReference spaceReference = reference.extractReference(EntityType.SPACE);
+        // The path is empty for top level documents.
+        String documentParentPath = "";
+        if (spaceReference != null) {
+            // This is not a top level document.
+            documentParentPath = this.localEntityReferenceSerializer.serialize(spaceReference);
+        }
+
+        // Note that this selects only direct children. We should probably select all the descendant nodes, but for this
+        // we need to update the rest of the SolrReferenceResolvers that call this one.
+        builder.append(FieldUtils.DOCUMENT_PARENT_PATH_EXACT);
         builder.append(':');
-        builder.append(ClientUtils.escapeQueryChars(reference.getName()));
+        builder.append(ClientUtils.escapeQueryChars(documentParentPath));
 
         return builder.toString();
     }
